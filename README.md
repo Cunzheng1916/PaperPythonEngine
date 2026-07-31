@@ -1141,8 +1141,10 @@ register_command(vip, name="vip", permission="admin.vip")
 ### 一、安装引擎
 
 1. 把 `PaperPythonEngine-1.0.0.jar` 放进服务器的 `plugins/` 文件夹。
-2. 启动服务器，引擎会自动创建 `plugins/PaperPythonEngine/` 目录结构。
+2. 启动服务器，引擎会自动创建目录结构。
 3. 若服务器已在运行，需**重启**（插件 jar 在启动时加载）。
+
+> **引擎不会自动生成任何 Python 插件。** 装上后它只创建空的 `PythonPlugin/`、`PythonEngine_ex/`、`cache/` 目录，并写入 API 模块 `ppe.py`；一切插件/轮子都需你手动放入对应目录。
 
 ### 二、放入插件与轮子
 
@@ -1159,7 +1161,7 @@ register_command(vip, name="vip", permission="admin.vip")
 | 命令 | 权限 | 说明 |
 |---|---|---|
 | `/pyreload` | `paperpython.reload` | 重载所有 Python 插件与轮子（卸载 → 重新加载） |
-| `/pyplist` | `paperpython.list` | 列出所有 Python 插件及状态（失败的标 `[FAILED]`） |
+| `/pyplist`（别名 `/pylist`） | `paperpython.list` | 列出轮子与全部插件，并标注每个插件依赖的轮子/插件（失败的标 `[FAILED]`） |
 
 - 控制台（服务器命令行）默认可执行；给玩家/管理员开权限请配合权限插件（如 LuckPerms）授权 `paperpython.reload` / `paperpython.list`，或直接加入 `ops.json`。
 
@@ -1184,7 +1186,18 @@ register_command(vip, name="vip", permission="admin.vip")
 | 命令 | 权限 | 说明 |
 |---|---|---|
 | `/pyreload` | `paperpython.reload` | 重载所有 Python 插件（卸载 → 重新加载） |
-| `/pyplist` | `paperpython.list` | 列出所有 Python 插件及状态 |
+| `/pyplist`（别名 `/pylist`） | `paperpython.list` | 列出轮子与全部插件，并标注每个插件依赖的轮子/插件（失败的标 `[FAILED]`） |
+
+> 服务器**每次启动时**会自动打印一次轮子与插件列表（含依赖），输出形如：
+> ```
+> [FW_PaperPythonEngine] Python wheels (3): giftbox, msg, util
+> [FW_PaperPythonEngine] Python plugins (10):
+> [FW_PaperPythonEngine] - core
+> [FW_PaperPythonEngine] - coreext [plugins: core]
+> [FW_PaperPythonEngine] - gift [wheels: giftbox]
+> [FW_PaperPythonEngine] - usewheel [wheels: msg, util]
+> [FW_PaperPythonEngine] - vip [wheels: msg; plugins: core]
+> ```
 
 ---
 

@@ -67,6 +67,13 @@ public final class PyEngine {
             logError("Failed to prepare directories", e);
         }
         reload();
+        printStatus();
+    }
+
+    private void printStatus() {
+        for (String line : listPlugins().split("\n")) {
+            logInfo(line);
+        }
     }
 
     public void shutdown() {
@@ -78,6 +85,7 @@ public final class PyEngine {
     public void reload() {
         unloadAll();
         scheduler.shutdownAll();
+        org.bukkit.event.HandlerList.unregisterAll(plugin);
         closeContext();
         context = createContext();
         wheels.clear();
@@ -86,9 +94,24 @@ public final class PyEngine {
     }
 
     public String listPlugins() {
-        StringBuilder sb = new StringBuilder("Python plugins (").append(plugins.size()).append("):");
+        StringBuilder sb = new StringBuilder("Python wheels (").append(wheels.size()).append("): ");
+        sb.append(wheels.isEmpty() ? "(none)" : String.join(", ", wheels.keySet()));
+        sb.append("\nPython plugins (").append(plugins.size()).append("):");
         for (PyPlugin p : plugins.values()) {
-            sb.append("\n- ").append(p.name()).append(p.failed() ? " [FAILED]" : "");
+            sb.append("\n- ").append(p.name());
+            List<String> deps = new ArrayList<>();
+            if (!p.requiredWheels().isEmpty()) {
+                deps.add("wheels: " + String.join(", ", new java.util.TreeSet<>(p.requiredWheels())));
+            }
+            if (!p.requiredPlugins().isEmpty()) {
+                deps.add("plugins: " + String.join(", ", new java.util.TreeSet<>(p.requiredPlugins())));
+            }
+            if (!deps.isEmpty()) {
+                sb.append(" [").append(String.join("; ", deps)).append("]");
+            }
+            if (p.failed()) {
+                sb.append(" [FAILED]");
+            }
         }
         return sb.toString();
     }
@@ -210,6 +233,9 @@ public final class PyEngine {
         }
         Value wheel = wheels.get(name);
         if (wheel != null) {
+            if (currentPlugin != null) {
+                currentPlugin.addRequiredWheel(name);
+            }
             return wheel;
         }
         PyPlugin p = plugins.get(name);
@@ -220,6 +246,9 @@ public final class PyEngine {
                     break;
                 }
             }
+        }
+        if (p != null && currentPlugin != null) {
+            currentPlugin.addRequiredPlugin(name);
         }
         return p != null ? p.module() : null;
     }
@@ -505,11 +534,16 @@ public final class PyEngine {
     }
 
     void invoke(Value fn, Object... args) {
-        if (fn == null || fn.isNull()) {
+        if (fn == null) {
             return;
         }
         try {
+            if (fn.isNull()) {
+                return;
+            }
             fn.execute(args);
+        } catch (IllegalStateException e) {
+            logWarn("Stale Python handler skipped (context reloaded): " + e.getMessage());
         } catch (PolyglotException e) {
             logError("Python callback error", e);
         } catch (Throwable t) {

@@ -54,7 +54,7 @@ def online_players():
 
 
 def run_command(command):
-    java.type("org.bukkit.Bukkit").dispatchCommand(
+    return java.type("org.bukkit.Bukkit").dispatchCommand(
         java.type("org.bukkit.Bukkit").getConsoleSender(), command)
 
 

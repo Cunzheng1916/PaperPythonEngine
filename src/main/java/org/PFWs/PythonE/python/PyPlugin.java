@@ -23,6 +23,8 @@ public final class PyPlugin {
     private final List<Command> commands = new ArrayList<>();
     private final List<PyEventListener.HandlerEntry> eventRegistrations = new ArrayList<>();
     private final Set<Integer> taskIds = new HashSet<>();
+    private final Set<String> requiredWheels = new HashSet<>();
+    private final Set<String> requiredPlugins = new HashSet<>();
 
     PyPlugin(String name, String moduleName, Path sourceZip, Path dir, Value onEnable, Value onDisable) {
         this.name = name;
@@ -108,5 +110,21 @@ public final class PyPlugin {
 
     void clearTasks() {
         taskIds.clear();
+    }
+
+    void addRequiredWheel(String name) {
+        requiredWheels.add(name);
+    }
+
+    void addRequiredPlugin(String name) {
+        requiredPlugins.add(name);
+    }
+
+    public Set<String> requiredWheels() {
+        return requiredWheels;
+    }
+
+    public Set<String> requiredPlugins() {
+        return requiredPlugins;
     }
 }

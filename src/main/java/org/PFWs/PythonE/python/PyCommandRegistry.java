@@ -16,8 +16,9 @@ public final class PyCommandRegistry {
     }
 
     void register(PyPlugin owner, String name, String description, String permission, List<String> aliases, Value fn) {
-        if (Bukkit.getCommandMap().getCommand(name) != null) {
-            engine.logWarn("Command '/" + name + "' is already registered, skipping");
+        Command existing = Bukkit.getCommandMap().getCommand(name);
+        if (existing != null && existing.getClass().getEnclosingClass() != PyCommandRegistry.class) {
+            engine.logWarn("Command '/" + name + "' already exists (not from this engine), skipping");
             return;
         }
         Command command = new Command(name, description == null ? "" : description, "/" + name, aliases) {
@@ -30,7 +31,12 @@ public final class PyCommandRegistry {
         if (permission != null && !permission.isEmpty()) {
             command.setPermission(permission);
         }
-        if (Bukkit.getCommandMap().register("paperpython", command) && owner != null) {
+        java.util.Map<String, Command> known = Bukkit.getCommandMap().getKnownCommands();
+        known.put(name.toLowerCase(java.util.Locale.ROOT), command);
+        for (String alias : aliases) {
+            known.put(alias.toLowerCase(java.util.Locale.ROOT), command);
+        }
+        if (owner != null) {
             owner.addCommand(command);
         }
     }

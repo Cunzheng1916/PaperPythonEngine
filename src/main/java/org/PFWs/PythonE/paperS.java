@@ -36,7 +36,7 @@ public final class paperS extends JavaPlugin {
         reload.setPermission("paperpython.reload");
         getServer().getCommandMap().register("paperpython", reload);
 
-        Command list = new Command("pyplist") {
+        Command list = new Command("pyplist", "", "/pyplist", java.util.List.of("pylist")) {
             @Override
             public boolean execute(CommandSender sender, String commandLabel, String[] args) {
                 sender.sendMessage(engine.listPlugins());
