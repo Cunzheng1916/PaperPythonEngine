@@ -15,6 +15,7 @@ public final class PyPlugin {
     private final String moduleName;
     private final Path sourceZip;
     private final Path dir;
+    private Value module;
     private Value onEnable;
     private Value onDisable;
     private boolean failed;
@@ -54,6 +55,14 @@ public final class PyPlugin {
 
     public Value onDisable() {
         return onDisable;
+    }
+
+    public Value module() {
+        return module;
+    }
+
+    void setModule(Value module) {
+        this.module = module;
     }
 
     void setHooks(Value onEnable, Value onDisable) {

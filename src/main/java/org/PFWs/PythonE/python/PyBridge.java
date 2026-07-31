@@ -86,4 +86,16 @@ public final class PyBridge {
     public String dataPath(String moduleName) {
         return engine.dataPath(moduleName);
     }
+
+    public Value require(String name) {
+        return engine.require(name);
+    }
+
+    public java.util.List<String> wheels() {
+        return engine.wheelNames();
+    }
+
+    public java.util.List<String> plugins() {
+        return engine.pluginNames();
+    }
 }

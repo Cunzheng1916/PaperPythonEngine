@@ -59,6 +59,29 @@ def run_command(command):
 
 
 # =====================================================================
+# 轮子 / 附属插件（PythonEngine_ex 中的扩展库，或另一个插件）
+# =====================================================================
+
+def require(name):
+    """导入一个轮子（PythonEngine_ex 中的 .py/.zip）或另一个插件。
+    外部模块只能通过本函数导入，不要直接 import。"""
+    module = _bridge.require(name)
+    if module is None:
+        raise ImportError("unknown wheel or plugin: " + name)
+    return module
+
+
+def wheels():
+    """返回已加载的轮子名列表。"""
+    return _bridge.wheels()
+
+
+def plugins():
+    """返回已加载的插件名列表。"""
+    return _bridge.plugins()
+
+
+# =====================================================================
 # 友好包装类（snake_case，另可用 .raw 访问原生 Bukkit 对象）
 # =====================================================================
 
