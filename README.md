@@ -24,6 +24,7 @@
 - [生命周期](#生命周期)
 - [完整示例](#完整示例)
 - [扩展与复用（轮子 / 附属插件）](#扩展与复用轮子--附属插件)
+- [四种配合的完整示例（新手格式）](#四种配合的完整示例新手格式)
 - [服主 / 管理员使用指南](#服主--管理员使用指南)
 - [控制命令](#控制命令)
 - [测试与调试](#测试与调试)
@@ -979,6 +980,157 @@ register_command(hello)
 > 引擎按 `dependencies` 自动调整加载顺序（先依赖、后被依赖），遇到循环依赖会跳过并告警。
 >
 > **缺失时的表现**：若 `ppe.require("X")` 找不到轮子/插件，会抛 `ImportError: unknown wheel or plugin: X`，该插件将**加载失败**；若声明的 `dependencies` 缺失，控制台会输出警告 `Plugin 'A' depends on missing wheel/plugin 'X'`。
+
+---
+
+## 四种配合的完整示例（新手格式）
+
+从"最简单"到"最复杂"，按需选用。所有代码均为**新手友好写法**（`from ppe import *`），完整文件在 `run/plugins/PaperPythonEngine/` 下（`PythonPlugin/` 放插件、`PythonEngine_ex/` 放轮子）。
+
+### ① 单插件：不需要任何外部代码
+
+`single/plugin.py` —— 玩家加入欢迎 + `/ping` + 每 30 秒定时公告。
+
+```python
+from ppe import *
+
+
+def on_enable():
+    info("single 插件已启用！")
+    every(30.0, periodic_broadcast)   # 每 30 秒定时公告
+
+
+def periodic_broadcast():
+    broadcast("欢迎来玩！这是 single 插件的定时公告。")
+
+
+def ping(player, args):
+    # /ping
+    player.send("Pong！")
+
+register_command(ping)
+
+
+def on_join(player):
+    # 玩家加入欢迎
+    player.send("欢迎，" + player.name() + "！")
+
+register_event("player_join", on_join)
+
+
+def on_disable():
+    info("single 插件已关闭。")
+```
+
+### ② 需要轮子：公共逻辑抽进 `PythonEngine_ex`
+
+`PythonEngine_ex/giftbox.py`（轮子）—— 发物品 + 记录礼包：
+
+```python
+from ppe import data_path, info
+import json
+import os
+
+LOG = os.path.join(data_path(), "gift_log.json")
+
+
+def give(player, material, amount=1):
+    player.give(material, amount)
+
+
+def log_gift(sender_name, receiver_name, item, amount):
+    records = []
+    try:
+        with open(LOG, encoding="utf-8") as f:
+            records = json.load(f)
+    except Exception:
+        records = []
+    records.append({"from": sender_name, "to": receiver_name, "item": item, "amount": amount})
+    with open(LOG, "w", encoding="utf-8") as f:
+        json.dump(records, f, ensure_ascii=False, indent=2)
+    info(sender_name + " 送给了 " + receiver_name + " " + str(amount) + " 个 " + item)
+```
+
+`gift/plugin.py`（插件，用 `ppe.require("giftbox")`）—— `/gift <玩家名> <物品> [数量]`：
+
+```python
+from ppe import *
+
+
+giftbox = require("giftbox")   # 导入轮子（不能直接 import giftbox）
+
+
+def send_gift(player, args):
+    if len(args) < 2:
+        player.send("用法：/gift <玩家名> <物品> [数量]")
+        return
+    target = get_player(args[0])
+    if target is None:
+        player.send("找不到玩家 " + args[0])
+        return
+    item = args[1]
+    amount = int(args[2]) if len(args) >= 3 else 1
+    giftbox.give(player, item, amount)          # 发给自己
+    giftbox.give(target, item, amount)          # 发给目标
+    giftbox.log_gift(player.name(), target.name(), item, amount)
+    player.send("已把 " + str(amount) + " 个 " + item + " 送给 " + target.name())
+
+
+register_command(send_gift, name="gift")
+```
+
+### ③ 需要依赖：附属插件
+
+`core/plugin.py`（被依赖的基础插件，提供等级能力）+ `coreext/plugin.py`（附属插件，扩展 `/level`）：
+
+```python
+# coreext/plugin.py —— 附属插件
+dependencies = ["core"]          # 引擎会先加载 core，再加载本插件
+
+from ppe import *
+
+core = require("core")           # 通过 ppe 导入插件 core（不能直接 import core）
+
+
+def level(player, args):
+    # /level
+    player.send("你的等级：" + str(core.get_level(player)))
+
+register_command(level)
+```
+
+### ④ 轮子 + 依赖都要
+
+`vip/plugin.py` —— 用 `msg` 轮子发公告，依赖 `core` 插件查/设等级：
+
+```python
+# vip/plugin.py
+dependencies = ["core"]          # 先加载 core
+
+from ppe import *
+
+msg = require("msg")             # ① 使用轮子 msg（发公告）
+core = require("core")           # ② 使用依赖插件 core（等级）
+
+
+def vip(player, args):
+    # /vip <玩家名>
+    if not args:
+        player.send("用法：/vip <玩家名>")
+        return
+    target = get_player(args[0])
+    if target is None:
+        player.send("找不到玩家 " + args[0])
+        return
+    core.set_level(target, 2)                    # 用依赖插件 core
+    msg.announce(target.name() + " 成为 VIP（等级 2）！")   # 用轮子 msg
+    player.send("已设置完成。")
+
+
+register_command(vip, name="vip", permission="admin.vip")
+```
+
+> 四种场景已在服务端验证通过：`single`（单插件）、`gift`（轮子 giftbox）、`coreext`（依赖 core）、`vip`（msg 轮子 + core 依赖）全部正常加载运行。
 
 ---
 
