@@ -398,11 +398,16 @@ def wrap_sender(sender):
 # 命令（新手友好：不需要装饰器）
 # =====================================================================
 
-def register_command(func, name=None, description="", permission=None, aliases=()):
+def register_command(func, name=None, description="", permission=None, aliases=(), tab_complete=None):
     def wrapper(sender, args):
         return func(wrap_sender(sender), list(args))
 
-    _bridge.registerCommand(name or func.__name__, description, permission, aliases, wrapper, _owner(func))
+    def tab_wrapper(sender, args):
+        if tab_complete is None:
+            return None
+        return list(tab_complete(wrap_sender(sender), list(args)))
+
+    _bridge.registerCommand(name or func.__name__, description, permission, aliases, wrapper, _owner(func), tab_wrapper)
     return func
 
 
@@ -487,13 +492,18 @@ def cancel(task_id):
 # 进阶：装饰器 + tick 单位（老式风格，仍可用）
 # =====================================================================
 
-def command(name=None, description="", permission=None, aliases=()):
+def command(name=None, description="", permission=None, aliases=(), tab_complete=None):
     if callable(name):
-        _bridge.registerCommand(name.__name__, "", None, (), name, _owner(name))
+        _bridge.registerCommand(name.__name__, "", None, (), name, _owner(name), None)
         return name
 
     def deco(fn):
-        _bridge.registerCommand(name or fn.__name__, description, permission, aliases, fn, _owner(fn))
+        def tab_wrapper(sender, args):
+            if tab_complete is None:
+                return None
+            return list(tab_complete(sender, list(args)))
+
+        _bridge.registerCommand(name or fn.__name__, description, permission, aliases, fn, _owner(fn), tab_wrapper)
         return fn
 
     return deco

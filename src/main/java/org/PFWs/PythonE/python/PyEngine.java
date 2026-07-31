@@ -507,8 +507,8 @@ public final class PyEngine {
         }
     }
 
-    void registerCommand(String ownerModule, String name, String description, String permission, List<String> aliases, Value handler) {
-        commands.register(currentPlugin != null ? currentPlugin : resolvePlugin(ownerModule), name, description, permission, aliases, handler);
+    void registerCommand(String ownerModule, String name, String description, String permission, List<String> aliases, Value handler, Value tabComplete) {
+        commands.register(currentPlugin != null ? currentPlugin : resolvePlugin(ownerModule), name, description, permission, aliases, handler, tabComplete);
     }
 
     long schedule(long delayTicks, Value handler, String ownerModule) {
@@ -549,6 +549,25 @@ public final class PyEngine {
         } catch (Throwable t) {
             logError("Python callback error", t);
         }
+    }
+
+    Value invokeResult(Value fn, Object... args) {
+        if (fn == null) {
+            return null;
+        }
+        try {
+            if (fn.isNull()) {
+                return null;
+            }
+            return fn.execute(args);
+        } catch (IllegalStateException e) {
+            logWarn("Stale Python handler skipped (context reloaded): " + e.getMessage());
+        } catch (PolyglotException e) {
+            logError("Python callback error", e);
+        } catch (Throwable t) {
+            logError("Python callback error", t);
+        }
+        return null;
     }
 
     private PyPlugin resolvePlugin(String ownerModule) {

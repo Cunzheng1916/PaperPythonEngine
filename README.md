@@ -109,6 +109,15 @@ register_command(hello)                                  # 命令名 = 函数名
 register_command(hello, permission="hello.use")          # 加权限：没有该权限的玩家无法使用
 register_command(hello, name="hi", description="打招呼",
                  permission="hello.use", aliases=("h",)) # 自定义命令名 / 描述 / 别名
+
+
+def hello_tab(player, args):
+    # Tab 补全：args 是已输入参数（不含命令名），返回建议列表
+    if not args:
+        return [p.name() for p in online_players()]      # 第一个参数补玩家名
+    return ["选项A", "选项B"]
+
+register_command(hello, tab_complete=hello_tab)          # 给命令加 Tab 补全
 ```
 
 **Java 形式**（进阶 · 装饰器 + 原生对象）：
@@ -121,14 +130,66 @@ def hello(sender, args):
     # sender：原生 CommandSender，用 Java 方法名 sendMessage
     sender.sendMessage("你好！")
 
-@command("hi", permission="hello.use", aliases=("h",))   # 自定义名 / 权限 / 别名
+@command("hi", permission="hello.use", aliases=("h",), tab_complete=hi_tab)
 def hi(sender, args):
     sender.sendMessage("你好！")
+
+def hi_tab(sender, args):
+    # 装饰器风格的补全函数：sender 是原生对象，args 是参数列表
+    return ["选项A", "选项B"]
 ```
 
 - 处理函数签名：`func(player, args)`
   - `player`：友好的玩家对象（控制台/命令方块则是 `sender`，也有 `send` 方法）
   - `args`：参数列表，例如 `/give diamond 64` 时 `args = ["diamond", "64"]`
+- 补全函数签名：`tab_complete(sender, args)`，`args` 为已输入的参数列表（不含命令名），返回建议字符串列表。
+
+### Tab 补全
+
+自定义命令默认只有"玩家名"补全。给 `register_command` / `@command` 传一个 `tab_complete` 函数即可自定义：玩家输入 `Tab` 时，返回的字符串列表会成为候选。
+
+**补全函数签名**：`tab_complete(sender, args)`
+- `sender`：执行者（新手风格是友好对象，装饰器风格是原生对象）
+- `args`：已输入的参数列表（**不含命令名**），例如输入 `/gift 小` 时 `args = ["小"]`
+- 返回：建议的**字符串列表**；返回 `None` / 空列表则本次不提供补全
+
+**按参数位置补全（最常用）**：
+
+```python
+from ppe import *
+
+def give_tab(player, args):
+    if len(args) <= 1:
+        # 第 1 个参数：补在线玩家名
+        return [p.name() for p in online_players()]
+    if len(args) == 2:
+        # 第 2 个参数：补常见物品
+        return ["DIAMOND", "GOLD_INGOT", "EMERALD", "IRON_INGOT"]
+    if len(args) == 3:
+        # 第 3 个参数：补数字
+        return ["1", "16", "64"]
+    return []
+
+def give(player, args):
+    ...
+
+register_command(give, name="give", tab_complete=give_tab)
+```
+
+**装饰器风格**同样支持：
+
+```python
+@command("give", tab_complete=give_tab)
+def give(sender, args):
+    ...
+```
+
+**说明**：
+- 玩家名等提示会由客户端自动按已输入前缀过滤，所以你直接返回**全部候选**即可。
+- 没有提供 `tab_complete` 的命令，默认仍是玩家名补全。
+- 补全函数里出错不会影响命令本身，错误会打印到日志。
+
+---
 
 ### 命令参数解析
 
@@ -1300,7 +1361,7 @@ gradlew shadowJar --no-build-cache --rerun-tasks   # 缓存异常时强制重建
 
 | 函数 | 说明 |
 |---|---|
-| `register_command(func, name=None, description="", permission=None, aliases=())` | 注册命令 |
+| `register_command(func, name=None, description="", permission=None, aliases=(), tab_complete=None)` | 注册命令（`tab_complete` 提供 Tab 补全） |
 | `register_event(event_name, func, priority="NORMAL")` | 注册事件（返回 `False` 可取消） |
 | `after(seconds, func)` | 延迟 N 秒执行一次，返回任务 ID |
 | `every(seconds, func)` | 每 N 秒重复执行，返回任务 ID |
@@ -1330,7 +1391,7 @@ gradlew shadowJar --no-build-cache --rerun-tasks   # 缓存异常时强制重建
 
 | 函数 | 说明 |
 |---|---|
-| `@command(name=None, description="", permission=None, aliases=())` | 命令装饰器 |
+| `@command(name=None, description="", permission=None, aliases=(), tab_complete=None)` | 命令装饰器 |
 | `@on_event(event_class, priority="NORMAL")` | 事件装饰器（传 Java 事件类） |
 | `schedule(delay_ticks, fn)` | 延迟 N tick（1 秒 = 20 tick） |
 | `schedule_repeating(delay_ticks, period_ticks, fn)` | 周期调度（tick） |

@@ -15,7 +15,7 @@ public final class PyCommandRegistry {
         this.engine = engine;
     }
 
-    void register(PyPlugin owner, String name, String description, String permission, List<String> aliases, Value fn) {
+    void register(PyPlugin owner, String name, String description, String permission, List<String> aliases, Value fn, Value tabComplete) {
         Command existing = Bukkit.getCommandMap().getCommand(name);
         if (existing != null && existing.getClass().getEnclosingClass() != PyCommandRegistry.class) {
             engine.logWarn("Command '/" + name + "' already exists (not from this engine), skipping");
@@ -26,6 +26,24 @@ public final class PyCommandRegistry {
             public boolean execute(CommandSender sender, String commandLabel, String[] args) {
                 engine.withPlugin(owner, () -> engine.invoke(fn, sender, args));
                 return true;
+            }
+
+            @Override
+            public java.util.List<String> tabComplete(CommandSender sender, String alias, String[] args) {
+                if (tabComplete != null) {
+                    Value result = engine.invokeResult(tabComplete, sender, args);
+                    if (result != null && result.hasArrayElements()) {
+                        java.util.List<String> out = new java.util.ArrayList<>();
+                        for (long i = 0; i < result.getArraySize(); i++) {
+                            Value v = result.getArrayElement(i);
+                            if (v.isString()) {
+                                out.add(v.asString());
+                            }
+                        }
+                        return out;
+                    }
+                }
+                return super.tabComplete(sender, alias, args);
             }
         };
         if (permission != null && !permission.isEmpty()) {

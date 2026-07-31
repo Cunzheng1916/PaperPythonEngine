@@ -46,7 +46,7 @@ public final class PyBridge {
         }
     }
 
-    public void registerCommand(String name, String description, String permission, Value aliases, Value handler, String ownerModule) {
+    public void registerCommand(String name, String description, String permission, Value aliases, Value handler, String ownerModule, Value tabComplete) {
         List<String> aliasList = new ArrayList<>();
         if (aliases != null && aliases.hasArrayElements()) {
             for (long i = 0; i < aliases.getArraySize(); i++) {
@@ -56,7 +56,7 @@ public final class PyBridge {
                 }
             }
         }
-        engine.registerCommand(ownerModule, name, description, permission, aliasList, handler);
+        engine.registerCommand(ownerModule, name, description, permission, aliasList, handler, tabComplete);
     }
 
     public long schedule(long delayTicks, Value handler, String ownerModule) {
