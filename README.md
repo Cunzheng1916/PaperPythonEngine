@@ -1344,3 +1344,4 @@ gradlew shadowJar --no-build-cache --rerun-tasks   # 缓存异常时强制重建
 - **性能**：事件处理器尽量轻量，`player_move` 等高频事件尤其注意。
 - **中文输出**：服务器日志默认 UTF-8。在 Windows 上若控制台中文乱码，请在启动参数加 `-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8`。
 - **API 版本**：当前基于 Paper 1.21.8 构建。
+- **许可证**：本引擎采用自定义许可证——允许个人/非商业使用与自由开发插件，**未经开发者书面授权，禁止用于商业运营的服务器或付费服务**。详见 [LICENSE](LICENSE)。
