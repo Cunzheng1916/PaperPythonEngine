@@ -1308,6 +1308,16 @@ gradlew shadowJar --no-build-cache --rerun-tasks   # 缓存异常时强制重建
 | `broadcast(message)` | 全服广播 |
 | `get_player(name)` | 按名取玩家，返回 `Player` 或 `None` |
 | `online_players()` | 返回在线玩家列表（`Player`） |
+| `get_entity(world, uuid)` | 按 UUID 在世界中查找实体 |
+| `remove_entity(entity)` | 移除一个实体（怪物/掉落物等） |
+| `get_killer(entity)` | 获取击杀该实体的玩家（`Player` 或 `None`） |
+| `is_player(obj)` | 判断对象是否为玩家 |
+| `get_world(name)` / `worlds()` | 按名取世界 / 列出所有世界 |
+| `particle(location, name, count=1, ox=0, oy=0, oz=0, extra=0)` | 在位置生成粒子（如 `"FLAME"`） |
+| `play_sound(who, sound, volume=1.0, pitch=1.0)` | 播放音效（玩家 / 位置） |
+| `item(material, name=None, lore=None, amount=1)` | 构造带名字/说明的物品 |
+| `spawn_entity(location, entity_type)` | 在世界中生成实体（如 `"ZOMBIE"`） |
+| `pdc_set(obj, key, value)` / `pdc_get(obj, key, default=None)` / `pdc_has(obj, key)` | 在玩家/实体/世界上存读持久数据（str/int/float/bool） |
 | `run_command(command)` | 以控制台执行命令 |
 | `info(message)` / `warn(message)` / `error(message)` | 日志，格式 `[FW_PaperPythonEngine][插件名] …` |
 | `data_path()` | 当前插件专属数据目录（自动创建） |

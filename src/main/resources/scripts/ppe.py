@@ -58,6 +58,150 @@ def run_command(command):
         java.type("org.bukkit.Bukkit").getConsoleSender(), command)
 
 
+def get_entity(world, uuid):
+    """按 UUID 在世界中查找实体（原生 Entity 或 None）"""
+    return world.getEntity(uuid)
+
+
+def remove_entity(entity):
+    """移除一个实体（怪物、掉落物等）"""
+    if entity is not None:
+        entity.remove()
+
+
+def get_killer(entity):
+    """获取击杀某实体（怪物/玩家）的玩家；无人击杀返回 None"""
+    if entity is None:
+        return None
+    killer = entity.getKiller()
+    return Player(killer) if killer is not None else None
+
+
+def is_player(obj):
+    """判断一个对象是不是玩家"""
+    return obj is not None and java.instanceof(obj, java.type("org.bukkit.entity.Player"))
+
+
+# =====================================================================
+# 世界
+# =====================================================================
+
+def get_world(name):
+    """按名字取世界（原生 World 或 None）"""
+    return java.type("org.bukkit.Bukkit").getWorld(name)
+
+
+def worlds():
+    """返回所有世界（原生 World 列表）"""
+    return list(java.type("org.bukkit.Bukkit").getWorlds())
+
+
+# =====================================================================
+# 粒子 / 音效
+# =====================================================================
+
+def particle(location, name, count=1, ox=0.0, oy=0.0, oz=0.0, extra=0.0):
+    """在位置生成粒子。location 可为友好 Location 或原生 Location。
+    name 用大写，如 'FLAME'；ox/oy/oz 为散布偏移，extra 为速度/额外参数。"""
+    from org.bukkit import Particle
+    raw = location.raw if isinstance(location, Location) else location
+    p = Particle.valueOf(str(name).upper())
+    raw.getWorld().spawnParticle(p, raw, int(count), float(ox), float(oy), float(oz), float(extra))
+
+
+def play_sound(who, sound, volume=1.0, pitch=1.0):
+    """播放音效：传玩家播放给他，传位置则全服在该位置播放。sound 用大写，如 'ENTITY_PLAYER_LEVELUP'。"""
+    from org.bukkit import Sound
+    s = Sound.valueOf(str(sound).upper())
+    if isinstance(who, Player):
+        raw = who.location().raw
+    else:
+        raw = who.raw if isinstance(who, Location) else who
+    raw.getWorld().playSound(raw, s, float(volume), float(pitch))
+
+
+# =====================================================================
+# 物品
+# =====================================================================
+
+def item(material, name=None, lore=None, amount=1):
+    """构造一个 ItemStack。material 用大写，如 'DIAMOND'；可加显示名与说明。"""
+    from org.bukkit import Material
+    from org.bukkit.inventory import ItemStack
+    if isinstance(material, str):
+        material = Material.valueOf(material.upper())
+    stack = ItemStack(material, int(amount))
+    if name or lore:
+        meta = stack.getItemMeta()
+        if name:
+            meta.setDisplayName(str(name))
+        if lore:
+            from java.util import ArrayList
+            lst = ArrayList()
+            for line in lore:
+                lst.add(str(line))
+            meta.setLore(lst)
+        stack.setItemMeta(meta)
+    return stack
+
+
+# =====================================================================
+# 实体
+# =====================================================================
+
+def spawn_entity(location, entity_type):
+    """在世界中生成一个实体，返回实体（原生 Entity）。entity_type 用大写，如 'ZOMBIE'。"""
+    from org.bukkit import EntityType
+    raw = location.raw if isinstance(location, Location) else location
+    et = EntityType.valueOf(str(entity_type).upper())
+    return raw.getWorld().spawnEntity(raw, et)
+
+
+# =====================================================================
+# 持久数据（PDC）：在玩家/实体/世界等对象上存数据
+# =====================================================================
+
+def _pdc_types():
+    from org.bukkit.persistence import PersistentDataType
+    return {
+        bool: PersistentDataType.BOOLEAN,
+        int: PersistentDataType.INTEGER,
+        float: PersistentDataType.DOUBLE,
+        str: PersistentDataType.STRING,
+    }
+
+
+def pdc_set(obj, key, value):
+    """往对象（玩家/实体/世界等）上存一个数据（str/int/float/bool）。"""
+    from org.bukkit import NamespacedKey
+    dt = _pdc_types().get(type(value))
+    if dt is None:
+        raise TypeError("不支持的 PDC 类型: " + str(type(value)))
+    obj.getPersistentDataContainer().set(NamespacedKey("ppe", str(key)), dt, value)
+
+
+def pdc_has(obj, key):
+    """判断对象上是否存在该键的数据。"""
+    from org.bukkit import NamespacedKey
+    dc = obj.getPersistentDataContainer()
+    nsk = NamespacedKey("ppe", str(key))
+    for dt in _pdc_types().values():
+        if dc.has(nsk, dt):
+            return True
+    return False
+
+
+def pdc_get(obj, key, default=None):
+    """读取对象上的数据；不存在返回 default。"""
+    from org.bukkit import NamespacedKey
+    dc = obj.getPersistentDataContainer()
+    nsk = NamespacedKey("ppe", str(key))
+    for dt in _pdc_types().values():
+        if dc.has(nsk, dt):
+            return dc.get(nsk, dt)
+    return default
+
+
 # =====================================================================
 # 轮子 / 附属插件（PythonEngine_ex 中的扩展库，或另一个插件）
 # =====================================================================
