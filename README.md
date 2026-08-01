@@ -436,8 +436,22 @@ error("错误")
 data_path()    # 当前插件的专属数据目录（自动创建）
 ```
 
-> 说明：`info/warn/error` 与 `data_path()` 是引擎提供的**简化封装**，Python 形式即可，没有额外的 Java 形式。
-> 底层对应：日志走 `[FW_PaperPythonEngine]` 前缀；数据目录为 `plugins/PaperPythonEngine/data/<插件名>/`。
+**保存数据必须使用专用函数**（强制存进当前插件的 `data/` 目录，防止数据散落他处）：
+
+```python
+save_json("profile", {"level": 5})            # → data/<插件名>/profile.json
+data = load_json("profile", {})               # 不存在返回 {}
+save_file("log.txt", "内容")                  # 文本文件
+text = load_file("log.txt", "")               # 不存在返回 ""
+list_data_files()                             # ['log.txt', 'profile.json']
+clear_data()                                  # 清空当前插件数据（谨慎）
+```
+
+> 说明：
+> - `info/warn/error` 与 `data_path()` 是引擎提供的**简化封装**，Python 形式即可，没有额外的 Java 形式。
+> - 数据目录为 `plugins/PaperPythonEngine/data/<插件名>/`；**删除插件不会删除其数据**，重装后数据仍在。
+> - 保存函数会校验文件名（拒绝 `..` / 路径分隔符），非法名会报错：`文件名不合法: '...'`。
+> - 读取不存在时返回默认值；JSON 解析/IO 错误会给出带完整路径的清晰报错。
 
 ---
 
@@ -1379,6 +1393,9 @@ gradlew shadowJar --no-build-cache --rerun-tasks   # 缓存异常时强制重建
 | `item(material, name=None, lore=None, amount=1)` | 构造带名字/说明的物品 |
 | `spawn_entity(location, entity_type)` | 在世界中生成实体（如 `"ZOMBIE"`） |
 | `pdc_set(obj, key, value)` / `pdc_get(obj, key, default=None)` / `pdc_has(obj, key)` | 在玩家/实体/世界上存读持久数据（str/int/float/bool） |
+| `save_json(name, data)` / `load_json(name, default=None)` | 保存/读取 JSON 数据（强制存进本插件 `data/` 目录） |
+| `save_file(name, text)` / `load_file(name, default=None)` | 保存/读取文本文件（同样强制落点） |
+| `list_data_files()` / `clear_data()` | 列出本插件数据文件 / 清空本插件数据 |
 | `run_command(command)` | 以控制台执行命令 |
 | `info(message)` / `warn(message)` / `error(message)` | 日志，格式 `[FW_PaperPythonEngine][插件名] …` |
 | `data_path()` | 当前插件专属数据目录（自动创建） |
