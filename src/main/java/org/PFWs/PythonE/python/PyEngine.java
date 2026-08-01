@@ -426,6 +426,7 @@ public final class PyEngine {
             } finally {
                 currentPlugin = null;
                 purgeSubmodules(moduleName, dest, true);
+                eval(context, "import sys\nsys.path.remove(" + pyStr(dest.toString()) + ")");
             }
 
             plugins.put(name, p);
@@ -476,7 +477,7 @@ public final class PyEngine {
     private void unload(PyPlugin p) {
         if (p.onDisable() != null) {
             try {
-                p.onDisable().execute();
+                withPlugin(p, () -> p.onDisable().execute());
             } catch (PolyglotException e) {
                 logError("on_disable failed for " + p.name(), e);
             }
@@ -660,10 +661,19 @@ public final class PyEngine {
     void withPlugin(PyPlugin owner, Runnable action) {
         PyPlugin previous = currentPlugin;
         currentPlugin = owner;
+        String dirStr = null;
+        if (owner != null && owner.dir() != null) {
+            dirStr = owner.dir().toString();
+            eval(context, "import sys\nsys.path.insert(0, " + pyStr(dirStr) + ")");
+        }
         try {
             action.run();
         } finally {
             currentPlugin = previous;
+            if (dirStr != null) {
+                purgeSubmodules(owner.moduleName(), owner.dir(), true);
+                eval(context, "import sys\nsys.path.remove(" + pyStr(dirStr) + ")");
+            }
         }
     }
 

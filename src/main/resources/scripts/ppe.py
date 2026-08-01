@@ -109,6 +109,11 @@ def is_player(obj):
     return obj is not None and java.instanceof(_as_raw(obj), java.type("org.bukkit.entity.Player"))
 
 
+def raw(obj):
+    """返回对象的原生 Bukkit 对象（友好包装对象则解包；原生对象原样返回）。"""
+    return _as_raw(obj)
+
+
 def broadcast(message):
     """全服广播。"""
     java.type("org.bukkit.Bukkit").broadcastMessage(str(message))
