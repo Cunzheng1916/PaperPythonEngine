@@ -43,6 +43,41 @@ public final class PyEngine {
     private final Map<String, Value> wheels = new LinkedHashMap<>();
     private final Set<Class<? extends Event>> registeredEventClasses = new HashSet<>();
     private final Set<String> usedModuleNames = new HashSet<>();
+    private Value pfSet;
+    private Value pfClear;
+
+    private static final String ISOLATION_CODE = "import sys, os\n"
+            + "import importlib.abc, importlib.machinery, importlib.util\n"
+            + "_pf_cur = None\n"
+            + "class _PluginLoader(importlib.machinery.SourceFileLoader):\n"
+            + "    def exec_module(self, module):\n"
+            + "        cached = sys.modules.get(module.__name__)\n"
+            + "        if cached is not None and cached is not module:\n"
+            + "            sys.modules[module.__name__] = cached\n"
+            + "            return\n"
+            + "        importlib.machinery.SourceFileLoader.exec_module(self, module)\n"
+            + "class _PluginFinder(importlib.abc.MetaPathFinder):\n"
+            + "    def find_spec(self, fullname, path=None, target=None):\n"
+            + "        cur = _pf_cur\n"
+            + "        if cur is None or '.' in fullname:\n"
+            + "            return None\n"
+            + "        d, prefix = cur\n"
+            + "        f = os.path.join(d, fullname + '.py')\n"
+            + "        if not os.path.isfile(f):\n"
+            + "            return None\n"
+            + "        try:\n"
+            + "            name = prefix + fullname\n"
+            + "            loader = _PluginLoader(name, f)\n"
+            + "            return importlib.util.spec_from_file_location(name, f, loader=loader)\n"
+            + "        except Exception:\n"
+            + "            return None\n"
+            + "sys.meta_path.insert(0, _PluginFinder())\n"
+            + "def _pf_set(d, prefix):\n"
+            + "    global _pf_cur\n"
+            + "    _pf_cur = (os.path.normcase(os.path.abspath(d)) + os.sep, prefix + '.')\n"
+            + "def _pf_clear():\n"
+            + "    global _pf_cur\n"
+            + "    _pf_cur = None\n";
 
     private final PyEventListener listener = new PyEventListener(this);
     private final PySchedulerBridge scheduler = new PySchedulerBridge(this);
@@ -88,9 +123,22 @@ public final class PyEngine {
         org.bukkit.event.HandlerList.unregisterAll(plugin);
         closeContext();
         context = createContext();
+        initIsolation();
         wheels.clear();
         loadWheels();
         loadAll();
+    }
+
+    private void initIsolation() {
+        try {
+            context.eval("python", ISOLATION_CODE);
+            pfSet = context.eval("python", "_pf_set");
+            pfClear = context.eval("python", "_pf_clear");
+        } catch (PolyglotException e) {
+            pfSet = null;
+            pfClear = null;
+            logError("Failed to init python module isolation", e);
+        }
     }
 
     public String listPlugins() {
@@ -210,17 +258,19 @@ public final class PyEngine {
         }
         String moduleName = sanitizeName(name, "wheel");
         try {
-            eval(context, "import sys\nsys.path.insert(0, " + pyStr(dir.toString()) + ")");
-            String code = "import importlib.util, sys\n"
-                    + "spec = importlib.util.spec_from_file_location(" + pyStr(moduleName) + ", " + pyStr(entry.toString()) + ")\n"
-                    + "mod = importlib.util.module_from_spec(spec)\n"
-                    + "sys.modules[" + pyStr(moduleName) + "] = mod\n"
-                    + "spec.loader.exec_module(mod)\n"
-                    + "sys.path.remove(" + pyStr(dir.toString()) + ")";
-            context.eval("python", code);
-            Value module = context.eval("python", "sys.modules.pop(" + pyStr(moduleName) + ", None)");
-            purgeSubmodules(moduleName, dir, true);
-            wheels.put(name, module);
+            pfSet.execute(dir.toString(), moduleName);
+            try {
+                String code = "import importlib.util, sys\n"
+                        + "spec = importlib.util.spec_from_file_location(" + pyStr(moduleName) + ", " + pyStr(entry.toString()) + ")\n"
+                        + "mod = importlib.util.module_from_spec(spec)\n"
+                        + "sys.modules[" + pyStr(moduleName) + "] = mod\n"
+                        + "spec.loader.exec_module(mod)";
+                context.eval("python", code);
+                Value module = context.eval("python", "sys.modules.pop(" + pyStr(moduleName) + ", None)");
+                wheels.put(name, module);
+            } finally {
+                pfClear.execute();
+            }
             logInfo("Loaded wheel " + name);
         } catch (PolyglotException e) {
             logError("Failed to load wheel " + name, e);
@@ -406,9 +456,12 @@ public final class PyEngine {
             return;
         }
         try {
-            eval(context, "import sys\nsys.path.insert(0, " + pyStr(dest.toString()) + ")");
             PyPlugin p = new PyPlugin(name, moduleName, source, dest, null, null);
             currentPlugin = p;
+            try {
+                pfSet.execute(dest.toString(), moduleName);
+            } catch (PolyglotException ignored) {
+            }
             try {
                 String code = "import importlib.util, sys\n"
                         + "spec = importlib.util.spec_from_file_location(" + pyStr(moduleName) + ", " + pyStr(entry.toString()) + ")\n"
@@ -425,8 +478,14 @@ public final class PyEngine {
                 );
             } finally {
                 currentPlugin = null;
-                purgeSubmodules(moduleName, dest, true);
-                eval(context, "import sys\nsys.path.remove(" + pyStr(dest.toString()) + ")");
+                try {
+                    context.eval("python", "import sys\nsys.modules.pop(" + pyStr(moduleName) + ", None)");
+                } catch (PolyglotException ignored) {
+                }
+                try {
+                    pfClear.execute();
+                } catch (PolyglotException ignored) {
+                }
             }
 
             plugins.put(name, p);
@@ -444,24 +503,6 @@ public final class PyEngine {
             logInfo("Loaded " + name);
         } catch (PolyglotException e) {
             logError("Failed to load " + name, e);
-        }
-    }
-
-    private void purgeSubmodules(String entryModule, Path pluginDir, boolean removeEntry) {
-        String code = "import sys, os\n"
-                + "_dir = os.path.normcase(os.path.abspath(" + pyStr(pluginDir.toString()) + ")) + os.sep\n"
-                + "_entry = " + pyStr(entryModule) + "\n"
-                + "for _n, _m in list(sys.modules.items()):\n"
-                + "    _f = getattr(_m, '__file__', None)\n"
-                + "    if _f:\n"
-                + "        _nf = os.path.normcase(os.path.abspath(_f))\n"
-                + "        if _nf.startswith(_dir) and (" + (removeEntry ? "True" : "_n != _entry") + "):\n"
-                + "            sys.modules.pop(_n, None)";
-        try {
-            if (context != null) {
-                context.eval("python", code);
-            }
-        } catch (PolyglotException ignored) {
         }
     }
 
@@ -486,6 +527,13 @@ public final class PyEngine {
         listener.unregister(p);
         scheduler.cancelAll(p);
         if (context != null) {
+            try {
+                String prefix = p.moduleName() + ".";
+                context.eval("python", "import sys\n"
+                        + "for _n in [x for x in list(sys.modules) if x.startswith(" + pyStr(prefix) + ")]:\n"
+                        + "    sys.modules.pop(_n, None)");
+            } catch (PolyglotException ignored) {
+            }
             try {
                 context.eval("python", "import sys\nsys.modules.pop(" + pyStr(p.moduleName()) + ", None)");
             } catch (PolyglotException ignored) {
@@ -661,18 +709,23 @@ public final class PyEngine {
     void withPlugin(PyPlugin owner, Runnable action) {
         PyPlugin previous = currentPlugin;
         currentPlugin = owner;
-        String dirStr = null;
-        if (owner != null && owner.dir() != null) {
-            dirStr = owner.dir().toString();
-            eval(context, "import sys\nsys.path.insert(0, " + pyStr(dirStr) + ")");
+        boolean isolated = false;
+        if (owner != null && owner.dir() != null && pfSet != null && pfClear != null) {
+            try {
+                pfSet.execute(owner.dir().toString(), owner.moduleName());
+                isolated = true;
+            } catch (PolyglotException ignored) {
+            }
         }
         try {
             action.run();
         } finally {
             currentPlugin = previous;
-            if (dirStr != null) {
-                purgeSubmodules(owner.moduleName(), owner.dir(), true);
-                eval(context, "import sys\nsys.path.remove(" + pyStr(dirStr) + ")");
+            if (isolated) {
+                try {
+                    pfClear.execute();
+                } catch (PolyglotException ignored) {
+                }
             }
         }
     }
